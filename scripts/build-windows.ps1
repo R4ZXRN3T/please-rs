@@ -4,11 +4,20 @@ rustup override set nightly
 
 $PKGNAME = "please"
 $PKGVERSION = (cargo metadata --format-version 1 | jq -r ".packages[] | select(.name==`"$PKGNAME`") | .version")
-$ARCH = switch ((cmd /c echo %PROCESSOR_ARCHITECTURE%)) {
-	"AMD64" {"x86_64"}
-	"ARM64" {"aarch64"}
-	"X86" {"i686"}
-	default {"unknown"}
+$ARCH = switch ((cmd /c echo %PROCESSOR_ARCHITECTURE%))
+{
+	"AMD64" {
+		"x86_64"
+	}
+	"ARM64" {
+		"aarch64"
+	}
+	"X86" {
+		"i686"
+	}
+	default {
+		"unknown"
+	}
 }
 
 Remove-Item -Path ".\final\$PKGNAME-$PKGVERSION-Windows-$ARCH" -Recurse -Force -ErrorAction SilentlyContinue

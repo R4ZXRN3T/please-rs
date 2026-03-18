@@ -1,4 +1,4 @@
-.PHONY: build clean install
+.PHONY: build clean install remove
 
 ifeq ($(OS),Windows_NT)
 UNAME_S := Windows
@@ -36,6 +36,18 @@ else
 	@exit 1
 endif
 
+remove:
+ifeq ($(UNAME_S),Linux)
+	rm /usr/bin/please
+else ifeq ($(UNAME_S),Darwin)
+	rm /usr/local/bin/please
+else ifeq ($(OS),Windows_NT)
+	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/uninstall-windows.ps1
+else
+	@echo "Unsupported operating system"
+	@exit 1
+endif
+
 clean:
 ifeq ($(UNAME_S),Linux)
 	rm -rf ./target
@@ -47,4 +59,3 @@ else
 	@echo "Unsupported operating system"
 	@exit 1
 endif
-

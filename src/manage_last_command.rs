@@ -1,7 +1,6 @@
-use anyhow::{anyhow, Context};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::{env, fs};
+use std::{env, error::Error, fs, io};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ShellKind {
@@ -15,20 +14,22 @@ enum ShellKind {
 	Unknown,
 }
 
-pub fn get_last_command() -> anyhow::Result<Vec<String>> {
+pub fn get_last_command() -> Result<Vec<String>, Box<dyn Error>> {
 	let detected = detect_shell();
 	if detected == ShellKind::Unknown {
-		return Err(anyhow!(
-			"unable to detect active shell; set PLEASE_SHELL or pass a command explicitly (e.g. please <cmd>)"
-		));
+		return Err(io::Error::other(
+			"unable to detect active shell; set PLEASE_SHELL or pass a command explicitly (e.g. please <cmd>)",
+		)
+			.into());
 	}
 
 	let mut skip = 0usize;
 	loop {
 		let Some(raw_command) = get_last_command_for_shell(detected, skip)? else {
-			return Err(anyhow!(
-				"unable to discover a previous non-'please' command for detected shell; pass a command explicitly (e.g. please <cmd>)"
-			));
+			return Err(io::Error::other(
+				"unable to discover a previous non-'please' command for detected shell; pass a command explicitly (e.g. please <cmd>)",
+			)
+				.into());
 		};
 
 		if !is_self_invocation(&raw_command) {
@@ -94,7 +95,10 @@ fn parse_shell_name(value: &str) -> ShellKind {
 		_ => ShellKind::Unknown,
 	}
 }
-fn get_last_command_for_shell(shell: ShellKind, skip: usize) -> anyhow::Result<Option<String>> {
+fn get_last_command_for_shell(
+	shell: ShellKind,
+	skip: usize,
+) -> Result<Option<String>, Box<dyn Error>> {
 	match shell {
 		ShellKind::PowerShell => read_powershell_history(skip),
 		ShellKind::Cmd => read_cmd_history(skip),
@@ -128,11 +132,7 @@ fn shell_command_to_exec(shell: ShellKind, raw_command: String) -> Vec<String> {
 }
 
 fn powershell_program() -> &'static str {
-	if cfg!(windows) {
-		"powershell"
-	} else {
-		"pwsh"
-	}
+	if cfg!(windows) { "powershell" } else { "pwsh" }
 }
 
 fn get_home_dir() -> Option<PathBuf> {
@@ -158,18 +158,21 @@ fn get_home_dir() -> Option<PathBuf> {
 
 fn nth_from_latest<I>(items: I, skip: usize) -> Option<String>
 where
-	I: IntoIterator<Item = String>,
+	I: IntoIterator<Item=String>,
 {
 	items.into_iter().nth(skip)
 }
 
-fn read_nth_non_empty_line(path: &Path, skip: usize) -> anyhow::Result<Option<String>> {
+fn read_nth_non_empty_line(path: &Path, skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 	let content = match fs::read_to_string(path) {
 		Ok(content) => content,
-		Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+		Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
 		Err(err) => {
-			return Err(err)
-				.with_context(|| format!("failed to read history file '{}'", path.display()));
+			return Err(io::Error::other(format!(
+				"failed to read history file '{}': {err}",
+				path.display()
+			))
+				.into());
 		}
 	};
 
@@ -184,7 +187,7 @@ fn read_nth_non_empty_line(path: &Path, skip: usize) -> anyhow::Result<Option<St
 	Ok(nth_from_latest(candidates, skip))
 }
 
-fn read_powershell_history(skip: usize) -> anyhow::Result<Option<String>> {
+fn read_powershell_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 	if let Some(app_data) = env::var_os("APPDATA") {
 		let mut history_path = PathBuf::from(app_data);
 		history_path.push("Microsoft");
@@ -198,7 +201,7 @@ fn read_powershell_history(skip: usize) -> anyhow::Result<Option<String>> {
 	Ok(None)
 }
 
-fn read_cmd_history(skip: usize) -> anyhow::Result<Option<String>> {
+fn read_cmd_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 	let output = Command::new("cmd")
 		.args(["/C", "doskey", "/history"])
 		.output();
@@ -228,7 +231,7 @@ fn read_bash_like_history(
 	histfile_env: &str,
 	default_file: &str,
 	skip: usize,
-) -> anyhow::Result<Option<String>> {
+) -> Result<Option<String>, Box<dyn Error>> {
 	let path = if let Some(histfile) = env::var_os(histfile_env) {
 		PathBuf::from(histfile)
 	} else if let Some(home) = get_home_dir() {
@@ -239,10 +242,13 @@ fn read_bash_like_history(
 
 	let content = match fs::read_to_string(&path) {
 		Ok(content) => content,
-		Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+		Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
 		Err(err) => {
-			return Err(err)
-				.with_context(|| format!("failed to read history file '{}'", path.display()));
+			return Err(io::Error::other(format!(
+				"failed to read history file '{}': {err}",
+				path.display()
+			))
+				.into());
 		}
 	};
 
@@ -262,7 +268,7 @@ fn is_bash_timestamp_marker(line: &str) -> bool {
 	line.starts_with('#') && line[1..].chars().all(|ch| ch.is_ascii_digit())
 }
 
-fn read_zsh_history(skip: usize) -> anyhow::Result<Option<String>> {
+fn read_zsh_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 	let Some(home) = get_home_dir() else {
 		return Ok(None);
 	};
@@ -270,10 +276,13 @@ fn read_zsh_history(skip: usize) -> anyhow::Result<Option<String>> {
 	let path = home.join(".zsh_history");
 	let content = match fs::read_to_string(&path) {
 		Ok(content) => content,
-		Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+		Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
 		Err(err) => {
-			return Err(err)
-				.with_context(|| format!("failed to read history file '{}'", path.display()));
+			return Err(io::Error::other(format!(
+				"failed to read history file '{}': {err}",
+				path.display()
+			))
+				.into());
 		}
 	};
 
@@ -296,7 +305,7 @@ fn read_zsh_history(skip: usize) -> anyhow::Result<Option<String>> {
 	Ok(nth_from_latest(candidates, skip))
 }
 
-fn read_fish_history(skip: usize) -> anyhow::Result<Option<String>> {
+fn read_fish_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 	let path = if let Some(xdg_data_home) = env::var_os("XDG_DATA_HOME") {
 		PathBuf::from(xdg_data_home)
 			.join("fish")
@@ -312,10 +321,13 @@ fn read_fish_history(skip: usize) -> anyhow::Result<Option<String>> {
 
 	let content = match fs::read_to_string(&path) {
 		Ok(content) => content,
-		Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+		Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
 		Err(err) => {
-			return Err(err)
-				.with_context(|| format!("failed to read history file '{}'", path.display()));
+			return Err(io::Error::other(format!(
+				"failed to read history file '{}': {err}",
+				path.display()
+			))
+				.into());
 		}
 	};
 
@@ -331,7 +343,7 @@ fn read_fish_history(skip: usize) -> anyhow::Result<Option<String>> {
 	Ok(nth_from_latest(candidates, skip))
 }
 
-fn read_nu_history(skip: usize) -> anyhow::Result<Option<String>> {
+fn read_nu_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 	let nu_query = format!("history | get command | reverse | skip {} | first", skip);
 	let output = Command::new("nu").args(["-c", &nu_query]).output();
 
