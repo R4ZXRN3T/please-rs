@@ -12,11 +12,13 @@ It supports two modes:
 Typing `sudo !!` or copy-pasting the previous command can be shell-specific and easy to forget.
 `please` gives you one consistent command across supported shells.
 
-## Requirements
+## Build Requirements
 
 - [Git](https://git-scm.com/) for cloning the repo
 - [Rust toolchain](https://rust-lang.org/learn/get-started/) (for building from source)
 - [Make](https://www.gnu.org/software/make/) for executing the build scripts.
+- [jq](https://jqlang.org/) for determining the version during build
+- A C/C++ compiler. ideally, [gcc](https://gcc.gnu.org/) for Linux/MacOs and [MSVC](https://visualstudio.microsoft.com/downloads/#title-build-tools-for-visual-studio-2026) for Windows (scroll down to 'Tools for Visual Studio', download and install 'Build tools for Visual Studio')
 
 ### Platform-Specific Requirements
 
