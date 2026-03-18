@@ -29,8 +29,8 @@ Typing `sudo !!` or copy-pasting the previous command can be shell-specific and 
 > **⚠️ Windows 11 (Build 24H2 or later) is required**
 >
 > `sudo` is only available on Windows 11 with update `24H2` or later.
-> To enable it: 
-> 
+> To enable it:
+>
 > **System Settings → System → Advanced → Activate sudo → inline**
 >
 > If you're on an earlier Windows version, `please` will not work.
@@ -62,6 +62,7 @@ Linux)\
 ```bash
 git clone https://github.com/R4ZXRN3T/please.git
 ```
+
 2. Open a terminal inside the cloned directory
 3. Run:
 
@@ -235,4 +236,3 @@ Always verify what command will run before confirming elevation prompts.
 ## License
 
 This project is licensed under the terms in [LICENSE](LICENSE).
-

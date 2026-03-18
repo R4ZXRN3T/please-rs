@@ -16,33 +16,39 @@ jobs:
           - os: Linux
             runner: ubuntu-latest
             arch: x86_64
+            target: x86_64-unknown-linux-gnu
             script: bash scripts/build-linux.sh
           - os: Linux
             runner: ubuntu-latest
             arch: aarch64
+            target: aarch64-unknown-linux-gnu
             script: bash scripts/build-linux.sh
             setup: |
               sudo apt-get update
               sudo apt-get install -y gcc-aarch64-linux-gnu
           - os: macOS
-            runner: macos-latest
+            runner: macos-13
             arch: x86_64
+            target: x86_64-apple-darwin
             script: bash scripts/build-macos.sh
           - os: macOS
-            runner: macos-latest
+            runner: macos-14
             arch: aarch64
+            target: aarch64-apple-darwin
             script: bash scripts/build-macos.sh
           - os: Windows
             runner: windows-latest
             arch: x86_64
+            target: x86_64-pc-windows-msvc
             script: pwsh -ExecutionPolicy Bypass -File scripts/build-windows.ps1
           - os: Windows
             runner: windows-latest
             arch: aarch64
+            target: aarch64-pc-windows-msvc
             script: pwsh -ExecutionPolicy Bypass -File scripts/build-windows.ps1
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install PowerShell
         if: runner.os == 'Windows'
@@ -62,6 +68,8 @@ jobs:
         run: sudo apt-get install -y upx
 
       - name: Build
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
         run: ${{ matrix.script }}
 
       - name: Extract version

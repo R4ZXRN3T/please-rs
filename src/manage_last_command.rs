@@ -272,7 +272,7 @@ fn get_home_dir() -> Option<PathBuf> {
 /// Returns `Some(String)` containing the nth element, or `None` if not enough elements exist.
 fn nth_from_latest<I>(items: I, skip: usize) -> Option<String>
 where
-	I: IntoIterator<Item = String>,
+	I: IntoIterator<Item=String>,
 {
 	items.into_iter().nth(skip)
 }
@@ -301,7 +301,7 @@ fn read_nth_non_empty_line(path: &Path, skip: usize) -> Result<Option<String>, B
 				"failed to read history file '{}': {err}",
 				path.display()
 			))
-			.into());
+				.into());
 		}
 	};
 
@@ -422,7 +422,7 @@ fn read_bash_like_history(
 				"failed to read history file '{}': {err}",
 				path.display()
 			))
-			.into());
+				.into());
 		}
 	};
 
@@ -484,7 +484,7 @@ fn read_zsh_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 				"failed to read history file '{}': {err}",
 				path.display()
 			))
-			.into());
+				.into());
 		}
 	};
 
@@ -545,7 +545,7 @@ fn read_fish_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 				"failed to read history file '{}': {err}",
 				path.display()
 			))
-			.into());
+				.into());
 		}
 	};
 
