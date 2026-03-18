@@ -3,3 +3,4 @@ final/
 *.exe
 *.zip
 .idea/
+Cargo.lock
