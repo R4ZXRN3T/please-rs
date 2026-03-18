@@ -149,7 +149,7 @@ please
 When you run `please` without arguments:
 
 1. it detects your shell
-2. reads the last hostory entry
+2. reads the last history entry
 3. skips entries that are `please` itself
 4. wraps the selected command for your shell and executes it via `sudo`
 
@@ -177,7 +177,7 @@ Accepted values include names like `cmd`, `powershell`, `pwsh`, `bash`, `sh`, `z
 
 ## Uninstall
 
-(This requires to be in the cloned repository)
+(For using the uninstalling per make, you need to be in the same directory as the [Makefile](Makefile))
 
 Using Makefile:
 
