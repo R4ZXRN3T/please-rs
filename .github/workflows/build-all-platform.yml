@@ -70,6 +70,7 @@ jobs:
       - name: Build
         env:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
         run: ${{ matrix.script }}
 
       - name: Extract version
