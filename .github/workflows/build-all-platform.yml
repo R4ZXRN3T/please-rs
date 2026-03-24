@@ -77,7 +77,7 @@ jobs:
         id: extract
         shell: bash
         run: |
-          VERSION=$(cargo metadata --format-version 1 | jq -r ".packages[] | select(.name==\"please\") | .version")
+          VERSION=$(cargo metadata --format-version 1 | jq -r ".packages[] | select(.name==\"please-rs\") | .version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Upload artifacts
