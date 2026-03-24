@@ -1,4 +1,4 @@
-.PHONY: build clean install remove
+.PHONY: build clean full-clean install remove
 
 ifeq ($(OS),Windows_NT)
 UNAME_S := Windows
@@ -22,15 +22,15 @@ install:
 ifeq ($(UNAME_S),Linux)
 	$(MAKE) build
 	cp ./final/*/please /usr/bin
-	$(MAKE) clean
+	$(MAKE) full-clean
 else ifeq ($(UNAME_S),Darwin)
 	$(MAKE) build
 	cp ./final/*/please /usr/local/bin
-	$(MAKE) clean
+	$(MAKE) full-clean
 else ifeq ($(OS),Windows_NT)
 	$(MAKE) build
 	@pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/install-windows.ps1
-	$(MAKE) clean
+	$(MAKE) full-clean
 else
 	@echo "Unsupported operating system"
 	@exit 1
@@ -55,6 +55,21 @@ else ifeq ($(UNAME_S),Darwin)
 	rm -rf ./target
 else ifeq ($(OS),Windows_NT)
 	rmdir /s /q .\target
+else
+	@echo "Unsupported operating system"
+	@exit 1
+endif
+
+full-clean:
+ifeq ($(UNAME_S),Linux)
+	rm -rf ./target
+	rm -rf ./final
+else ifeq ($(UNAME_S),Darwin)
+	rm -rf ./target
+	rm -rf ./final
+else ifeq ($(OS),Windows_NT)
+	rmdir /s /q .\target
+	rmdir /s /q .\final
 else
 	@echo "Unsupported operating system"
 	@exit 1
