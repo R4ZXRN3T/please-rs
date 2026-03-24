@@ -64,7 +64,31 @@ Linux)\
 
 ## Installation
 
-### 1) Build and install with Makefile
+### 1) Install on Arch Linux (AUR)
+
+On Arch Linux, you can install `please-rs` with your preferred AUR helper:
+
+```bash
+yay -S please-rs
+```
+
+or
+
+```bash
+paru -S please-rs
+```
+
+Manual AUR install:
+
+```bash
+git clone https://aur.archlinux.org/please-rs.git
+cd please-rs
+makepkg -si
+```
+
+Release note: the AUR package version (`pkgver`) should match the GitHub release tag.
+
+### 2) Build and install with Makefile
 
 1. Clone the repository (requires Git)
 
@@ -95,17 +119,6 @@ What this does:
 	- macOS: `/usr/local/bin/please`
 	- Windows: `%ProgramFiles%\please\please.exe` and adds that folder to system `PATH`
 
-### 2) Build with Cargo only
-
-```bash
-cargo build --release
-```
-
-Binary location:
-
-- `target/release/please` (Linux/macOS)
-- `target/release/please.exe` (Windows)
-
 ### 3) Use prebuilt artifacts
 
 If you do not want to build from source, download a prebuilt binary from GitHub Releases:
@@ -131,6 +144,17 @@ Recommended locations:
 | Windows | C:\Program Files\please\ |
 
 (On windows you will have to add `C:\Program Files\please` to either user or system `PATH`.)
+
+### 4) Build with Cargo only
+
+```bash
+cargo build --release
+```
+
+Binary location:
+
+- `target/release/please` (Linux/macOS)
+- `target/release/please.exe` (Windows)
 
 ## Usage
 
