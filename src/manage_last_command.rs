@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
-use std::process::Command;
-use std::{env, error::Error, fs, io};
+use std::process::{self, Command};
+use std::{env, error::Error, fmt, fs, io};
 
 /// Represents the type of shell being used.
 ///
@@ -8,7 +8,7 @@ use std::{env, error::Error, fs, io};
 /// Each variant corresponds to a different shell environment with its own history format
 /// and command execution requirements.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ShellKind {
+pub enum ShellKind {
 	/// Windows Command Prompt (cmd.exe)
 	Cmd,
 	/// PowerShell (both Windows and Core versions)
@@ -24,7 +24,28 @@ enum ShellKind {
 	/// Nushell (Nu)
 	Nu,
 	/// Unknown or undetected shell
-	Unknown,
+	Unknown
+}
+
+impl ShellKind {
+	pub fn as_str(self) -> &'static str {
+		match self {
+			ShellKind::Cmd => "cmd",
+			ShellKind::PowerShell => "powershell",
+			ShellKind::Bash => "bash",
+			ShellKind::Sh => "sh",
+			ShellKind::Zsh => "zsh",
+			ShellKind::Fish => "fish",
+			ShellKind::Nu => "nu",
+			ShellKind::Unknown => "unknown",
+		}
+	}
+}
+
+impl fmt::Display for ShellKind {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(self.as_str())
+	}
 }
 
 /// Retrieves the last non-'please' command from shell history and converts it to an executable format.
@@ -73,9 +94,13 @@ pub fn get_last_command() -> Result<Vec<String>, Box<dyn Error>> {
 /// # Returns
 ///
 /// Returns a `ShellKind` enum representing the detected shell, or `ShellKind::Unknown` if detection fails.
-fn detect_shell() -> ShellKind {
+pub(crate) fn detect_shell() -> ShellKind {
 	if let Some(shell) = env::var_os("PLEASE_SHELL") {
 		return parse_shell_name(&shell.to_string_lossy());
+	}
+
+	if let Some(shell) = detect_shell_from_parent_process() {
+		return shell;
 	}
 
 	if let Some(shell_path) = env::var_os("SHELL") {
@@ -110,6 +135,124 @@ fn detect_shell() -> ShellKind {
 	ShellKind::Unknown
 }
 
+/// Attempts to detect the shell from the current process parent chain.
+///
+/// This helps prefer the currently active interactive shell over login/default shell variables.
+fn detect_shell_from_parent_process() -> Option<ShellKind> {
+	if cfg!(windows) {
+		detect_shell_from_parent_process_windows()
+	} else {
+		detect_shell_from_parent_process_unix()
+	}
+}
+
+/// Detects a shell by traversing parent processes via `ps` on Unix-like systems.
+fn detect_shell_from_parent_process_unix() -> Option<ShellKind> {
+	let mut pid = process::id();
+
+	for _ in 0..8 {
+		let parent_pid = unix_parent_pid(pid)?;
+		let process_name = unix_process_name(parent_pid)?;
+		let parsed = parse_shell_name(&process_name);
+		if parsed != ShellKind::Unknown {
+			return Some(parsed);
+		}
+		pid = parent_pid;
+	}
+
+	None
+}
+
+fn unix_parent_pid(pid: u32) -> Option<u32> {
+	let output = Command::new("ps")
+		.args(["-o", "ppid=", "-p", &pid.to_string()])
+		.output()
+		.ok()?;
+
+	if !output.status.success() {
+		return None;
+	}
+
+	String::from_utf8_lossy(&output.stdout)
+		.trim()
+		.parse::<u32>()
+		.ok()
+}
+
+fn unix_process_name(pid: u32) -> Option<String> {
+	let output = Command::new("ps")
+		.args(["-o", "comm=", "-p", &pid.to_string()])
+		.output()
+		.ok()?;
+
+	if !output.status.success() {
+		return None;
+	}
+
+	let name = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+	if name.is_empty() {
+		None
+	} else {
+		Some(name)
+	}
+}
+
+/// Detects a shell by traversing parent processes through WMI on Windows.
+fn detect_shell_from_parent_process_windows() -> Option<ShellKind> {
+	let mut pid = process::id();
+
+	for _ in 0..8 {
+		let parent_pid = windows_parent_pid(pid)?;
+		let process_name = windows_process_name(parent_pid)?;
+		let parsed = parse_shell_name(&process_name);
+		if parsed != ShellKind::Unknown {
+			return Some(parsed);
+		}
+		pid = parent_pid;
+	}
+
+	None
+}
+
+fn windows_parent_pid(pid: u32) -> Option<u32> {
+	let script = format!(
+		"(Get-CimInstance Win32_Process -Filter \"ProcessId={}\").ParentProcessId",
+		pid
+	);
+	let output = run_powershell_query(&script)?;
+	output.trim().parse::<u32>().ok()
+}
+
+fn windows_process_name(pid: u32) -> Option<String> {
+	let script = format!("(Get-CimInstance Win32_Process -Filter \"ProcessId={}\").Name", pid);
+	let name = run_powershell_query(&script)?;
+	let name = name.trim();
+	if name.is_empty() {
+		None
+	} else {
+		Some(name.to_owned())
+	}
+}
+
+fn run_powershell_query(script: &str) -> Option<String> {
+	for program in ["pwsh", "powershell"] {
+		let output = Command::new(program)
+			.args(["-NoProfile", "-Command", script])
+			.output();
+
+		if let Ok(value) = output {
+			if value.status.success() {
+				let text = String::from_utf8_lossy(&value.stdout).trim().to_owned();
+				if !text.is_empty() {
+					return Some(text);
+				}
+			}
+		}
+	}
+
+	None
+}
+
 /// Parses a shell name string into a `ShellKind` enum variant.
 ///
 /// Extracts the executable name from a full path and matches it against known shell names.
@@ -128,15 +271,19 @@ fn parse_shell_name(value: &str) -> ShellKind {
 		.and_then(|name| name.to_str())
 		.unwrap_or(value)
 		.to_ascii_lowercase();
+	let shell_name = shell_name.trim_start_matches('-');
 
-	match shell_name.as_str() {
+	match shell_name {
 		"cmd" | "cmd.exe" => ShellKind::Cmd,
-		"powershell" | "powershell.exe" | "pwsh" | "pwsh.exe" => ShellKind::PowerShell,
-		"bash" => ShellKind::Bash,
-		"sh" => ShellKind::Sh,
-		"zsh" => ShellKind::Zsh,
-		"fish" => ShellKind::Fish,
-		"nu" | "nushell" => ShellKind::Nu,
+		"powershell" | "powershell.exe" | "pwsh" | "pwsh.exe" | "pwsh-preview"
+		| "pwsh-preview.exe" => ShellKind::PowerShell,
+		"bash" | "bash.exe" => ShellKind::Bash,
+		"sh" | "sh.exe" | "dash" | "dash.exe" | "ksh" | "ksh.exe" | "ash" | "ash.exe" => {
+			ShellKind::Sh
+		}
+		"zsh" | "zsh.exe" => ShellKind::Zsh,
+		"fish" | "fish.exe" => ShellKind::Fish,
+		"nu" | "nu.exe" | "nushell" | "nushell.exe" => ShellKind::Nu,
 		_ => ShellKind::Unknown,
 	}
 }
