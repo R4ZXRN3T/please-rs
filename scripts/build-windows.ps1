@@ -3,7 +3,7 @@
 rustup override set nightly
 
 $PKGNAME = "please"
-$PKGVERSION = (cargo metadata --format-version 1 | jq -r ".packages[] | select(.name==`"$PKGNAME`-rs") | .version")
+$PKGVERSION = (cargo metadata --format-version 1 | jq -r ".packages[] | select(.name==`"$PKGNAME-rs`") | .version")
 
 # Use CARGO_BUILD_TARGET if set (for cross-compilation), otherwise detect host architecture
 if ($env:CARGO_BUILD_TARGET)
