@@ -19,6 +19,7 @@ Typing `sudo !!` or copy-pasting the previous command can be shell-specific and 
 - [Make](https://www.gnu.org/software/make/) for executing the build scripts.
 - [jq](https://jqlang.org/) for determining the version during build
 - A C/C++ compiler. ideally, [gcc](https://gcc.gnu.org/) for Linux/MacOs and [MSVC](https://visualstudio.microsoft.com/downloads/#title-build-tools-for-visual-studio-2026) for Windows (scroll down to 'Tools for Visual Studio', download and install 'Build tools for Visual Studio')
+- [UPX](https://upx.github.io/) For compressing the binary (Only for Linux)
 
 ### Platform-Specific Requirements
 
