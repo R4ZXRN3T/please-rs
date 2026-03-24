@@ -7,7 +7,7 @@ arch=('x86_64' 'aarch64' 'armv7h' 'i686')
 url='https://github.com/R4ZXRN3T/please-rs'
 license=('GPL-3.0-or-later')
 depends=()
-makedepends=('git' 'rustup' 'upx' 'gcc' 'make' 'jq')
+makedepends=('git' 'rustup' 'upx' 'gcc')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/R4ZXRN3T/please-rs/archive/refs/tags/$pkgver.tar.gz")
 sha256sums=('SKIP')
 
