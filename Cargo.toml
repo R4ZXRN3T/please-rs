@@ -1,9 +1,21 @@
 [package]
-name = "please"
-version = "1.0.0"
+name = "please-rs"
+version = "1.1.0"
 edition = "2024"
+description = "A tiny Rust CLI that runs the last command with sudo."
+readme = "README.md"
+license-file = "LICENSE"
+repository = "https://github.com/R4ZXRN3T/please-rs"
+keywords = ["cli", "sudo", "shell", "history", "utility"]
+categories = ["command-line-utilities"]
+publish = false
+rust-version = "1.88.0"
 
-[dependencies]
+[[bin]]
+name = "please"
+path = "src/main.rs"
+test = false
+bench = false
 
 [profile.release]
 strip = true

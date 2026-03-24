@@ -69,7 +69,7 @@ Linux)\
 1. Clone the repository (requires Git)
 
 ```bash
-git clone https://github.com/R4ZXRN3T/please.git
+git clone https://github.com/R4ZXRN3T/please-rs.git
 ```
 
 2. Open a terminal inside the cloned directory
@@ -110,7 +110,7 @@ Binary location:
 
 If you do not want to build from source, download a prebuilt binary from GitHub Releases:
 
-- https://github.com/R4ZXRN3T/please/releases
+- https://github.com/R4ZXRN3T/please-rs/releases
 
 Look for assets named like:
 
