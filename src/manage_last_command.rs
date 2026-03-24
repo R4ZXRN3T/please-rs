@@ -1,5 +1,6 @@
+use crate::get_current_shell;
 use std::path::{Path, PathBuf};
-use std::process::{self, Command};
+use std::process::Command;
 use std::{env, error::Error, fmt, fs, io};
 
 /// Represents the type of shell being used.
@@ -8,7 +9,7 @@ use std::{env, error::Error, fmt, fs, io};
 /// Each variant corresponds to a different shell environment with its own history format
 /// and command execution requirements.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ShellKind {
+pub(crate) enum ShellKind {
 	/// Windows Command Prompt (cmd.exe)
 	Cmd,
 	/// PowerShell (both Windows and Core versions)
@@ -24,7 +25,7 @@ pub enum ShellKind {
 	/// Nushell (Nu)
 	Nu,
 	/// Unknown or undetected shell
-	Unknown
+	Unknown,
 }
 
 impl ShellKind {
@@ -60,8 +61,8 @@ impl fmt::Display for ShellKind {
 /// # Errors
 ///
 /// Returns an error if the shell cannot be detected or if no suitable command is found in history.
-pub fn get_last_command() -> Result<Vec<String>, Box<dyn Error>> {
-	let detected = detect_shell();
+pub(crate) fn get_last_command() -> Result<Vec<String>, Box<dyn Error>> {
+	let detected = get_current_shell::detect_shell();
 	if detected == ShellKind::Unknown {
 		return Err(io::Error::other(
 			"unable to detect active shell; set PLEASE_SHELL or pass a command explicitly (e.g. please <cmd>)",
@@ -86,173 +87,6 @@ pub fn get_last_command() -> Result<Vec<String>, Box<dyn Error>> {
 	}
 }
 
-/// Detects the currently active shell environment.
-///
-/// Checks environment variables and system configuration to determine the active shell.
-/// Supports: PowerShell, Cmd, Bash, Sh, Zsh, Fish, and Nushell.
-///
-/// # Returns
-///
-/// Returns a `ShellKind` enum representing the detected shell, or `ShellKind::Unknown` if detection fails.
-pub(crate) fn detect_shell() -> ShellKind {
-	if let Some(shell) = env::var_os("PLEASE_SHELL") {
-		return parse_shell_name(&shell.to_string_lossy());
-	}
-
-	if let Some(shell) = detect_shell_from_parent_process() {
-		return shell;
-	}
-
-	if let Some(shell_path) = env::var_os("SHELL") {
-		if let Some(name) = Path::new(&shell_path).file_name() {
-			let parsed = parse_shell_name(&name.to_string_lossy());
-			if parsed != ShellKind::Unknown {
-				return parsed;
-			}
-		}
-	}
-
-	if env::var_os("NU_VERSION").is_some() {
-		return ShellKind::Nu;
-	}
-
-	if env::var_os("PSModulePath").is_some() {
-		return ShellKind::PowerShell;
-	}
-
-	if cfg!(windows) {
-		if let Some(comspec) = env::var_os("ComSpec") {
-			if comspec
-				.to_string_lossy()
-				.to_ascii_lowercase()
-				.contains("cmd.exe")
-			{
-				return ShellKind::Cmd;
-			}
-		}
-	}
-
-	ShellKind::Unknown
-}
-
-/// Attempts to detect the shell from the current process parent chain.
-///
-/// This helps prefer the currently active interactive shell over login/default shell variables.
-fn detect_shell_from_parent_process() -> Option<ShellKind> {
-	if cfg!(windows) {
-		detect_shell_from_parent_process_windows()
-	} else {
-		detect_shell_from_parent_process_unix()
-	}
-}
-
-/// Detects a shell by traversing parent processes via `ps` on Unix-like systems.
-fn detect_shell_from_parent_process_unix() -> Option<ShellKind> {
-	let mut pid = process::id();
-
-	for _ in 0..8 {
-		let parent_pid = unix_parent_pid(pid)?;
-		let process_name = unix_process_name(parent_pid)?;
-		let parsed = parse_shell_name(&process_name);
-		if parsed != ShellKind::Unknown {
-			return Some(parsed);
-		}
-		pid = parent_pid;
-	}
-
-	None
-}
-
-fn unix_parent_pid(pid: u32) -> Option<u32> {
-	let output = Command::new("ps")
-		.args(["-o", "ppid=", "-p", &pid.to_string()])
-		.output()
-		.ok()?;
-
-	if !output.status.success() {
-		return None;
-	}
-
-	String::from_utf8_lossy(&output.stdout)
-		.trim()
-		.parse::<u32>()
-		.ok()
-}
-
-fn unix_process_name(pid: u32) -> Option<String> {
-	let output = Command::new("ps")
-		.args(["-o", "comm=", "-p", &pid.to_string()])
-		.output()
-		.ok()?;
-
-	if !output.status.success() {
-		return None;
-	}
-
-	let name = String::from_utf8_lossy(&output.stdout).trim().to_owned();
-	if name.is_empty() {
-		None
-	} else {
-		Some(name)
-	}
-}
-
-/// Detects a shell by traversing parent processes through WMI on Windows.
-fn detect_shell_from_parent_process_windows() -> Option<ShellKind> {
-	let mut pid = process::id();
-
-	for _ in 0..8 {
-		let parent_pid = windows_parent_pid(pid)?;
-		let process_name = windows_process_name(parent_pid)?;
-		let parsed = parse_shell_name(&process_name);
-		if parsed != ShellKind::Unknown {
-			return Some(parsed);
-		}
-		pid = parent_pid;
-	}
-
-	None
-}
-
-fn windows_parent_pid(pid: u32) -> Option<u32> {
-	let script = format!(
-		"(Get-CimInstance Win32_Process -Filter \"ProcessId={}\").ParentProcessId",
-		pid
-	);
-	let output = run_powershell_query(&script)?;
-	output.trim().parse::<u32>().ok()
-}
-
-fn windows_process_name(pid: u32) -> Option<String> {
-	let script = format!("(Get-CimInstance Win32_Process -Filter \"ProcessId={}\").Name", pid);
-	let name = run_powershell_query(&script)?;
-	let name = name.trim();
-	if name.is_empty() {
-		None
-	} else {
-		Some(name.to_owned())
-	}
-}
-
-fn run_powershell_query(script: &str) -> Option<String> {
-	for program in ["pwsh", "powershell"] {
-		let output = Command::new(program)
-			.args(["-NoProfile", "-Command", script])
-			.output();
-
-		if let Ok(value) = output {
-			if value.status.success() {
-				let text = String::from_utf8_lossy(&value.stdout).trim().to_owned();
-				if !text.is_empty() {
-					return Some(text);
-				}
-			}
-		}
-	}
-
-	None
-}
-
 /// Parses a shell name string into a `ShellKind` enum variant.
 ///
 /// Extracts the executable name from a full path and matches it against known shell names.
@@ -265,7 +99,7 @@ fn run_powershell_query(script: &str) -> Option<String> {
 /// # Returns
 ///
 /// Returns the matched `ShellKind`, or `ShellKind::Unknown` if no match is found.
-fn parse_shell_name(value: &str) -> ShellKind {
+pub(crate) fn parse_shell_name(value: &str) -> ShellKind {
 	let shell_name = Path::new(value)
 		.file_name()
 		.and_then(|name| name.to_str())
@@ -465,30 +299,77 @@ fn read_nth_non_empty_line(path: &Path, skip: usize) -> Result<Option<String>, B
 
 /// Reads the PowerShell history from the PSReadLine history file.
 ///
+/// Tries common PSReadLine locations across Windows, Linux, and macOS.
+///
 /// # Arguments
 ///
 /// * `skip` - The number of history entries to skip from the most recent (0 = most recent).
 ///
 /// # Returns
 ///
-/// Returns `Some(String)` containing the requested command, or `None` if the history file is not found
-/// or the APPDATA environment variable is not set.
+/// Returns `Some(String)` containing the requested command, or `None` if no supported
+/// history file exists.
 ///
 /// # Errors
 ///
-/// Returns an error if reading the history file fails.
+/// Returns an error if reading a discovered history file fails for reasons other than `NotFound`.
 fn read_powershell_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
-	if let Some(app_data) = env::var_os("APPDATA") {
-		let mut history_path = PathBuf::from(app_data);
-		history_path.push("Microsoft");
-		history_path.push("Windows");
-		history_path.push("PowerShell");
-		history_path.push("PSReadLine");
-		history_path.push("ConsoleHost_history.txt");
-		return read_nth_non_empty_line(&history_path, skip);
+	for history_path in resolve_powershell_history_paths() {
+		if let Some(command) = read_nth_non_empty_line(&history_path, skip)? {
+			return Ok(Some(command));
+		}
 	}
 
 	Ok(None)
+}
+
+fn resolve_powershell_history_paths() -> Vec<PathBuf> {
+	let mut candidates = Vec::new();
+
+	if let Some(app_data) = env::var_os("APPDATA") {
+		candidates.push(
+			PathBuf::from(app_data)
+				.join("Microsoft")
+				.join("Windows")
+				.join("PowerShell")
+				.join("PSReadLine")
+				.join("ConsoleHost_history.txt"),
+		);
+	}
+
+	if let Some(xdg_data_home) = env::var_os("XDG_DATA_HOME") {
+		candidates.push(
+			PathBuf::from(xdg_data_home)
+				.join("powershell")
+				.join("PSReadLine")
+				.join("ConsoleHost_history.txt"),
+		);
+	}
+
+	if let Some(home) = get_home_dir() {
+		candidates.push(
+			home.join(".local")
+				.join("share")
+				.join("powershell")
+				.join("PSReadLine")
+				.join("ConsoleHost_history.txt"),
+		);
+		candidates.push(
+			home.join(".config")
+				.join("powershell")
+				.join("PSReadLine")
+				.join("ConsoleHost_history.txt"),
+		);
+		candidates.push(
+			home.join("Library")
+				.join("Application Support")
+				.join("powershell")
+				.join("PSReadLine")
+				.join("ConsoleHost_history.txt"),
+		);
+	}
+
+	candidates
 }
 
 /// Reads the command history from the Windows cmd.exe doskey history.
@@ -603,8 +484,13 @@ fn is_bash_timestamp_marker(line: &str) -> bool {
 
 /// Reads the command history from a Zsh history file.
 ///
-/// Zsh history entries may include timing information separated by semicolons.
-/// This function parses those entries and extracts the actual commands.
+/// Uses this lookup order for the history file path:
+/// 1. `$HISTFILE`
+/// 2. `$ZDOTDIR/.zsh_history`
+/// 3. `$HOME/.zsh_history`
+///
+/// Zsh history entries may include timing metadata separated by semicolons.
+/// This function extracts the command portion when available.
 ///
 /// # Arguments
 ///
@@ -618,11 +504,10 @@ fn is_bash_timestamp_marker(line: &str) -> bool {
 ///
 /// Returns an error if reading the history file fails for reasons other than NotFound.
 fn read_zsh_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
-	let Some(home) = get_home_dir() else {
+	let Some(path) = resolve_zsh_history_path() else {
 		return Ok(None);
 	};
 
-	let path = home.join(".zsh_history");
 	let content = match fs::read_to_string(&path) {
 		Ok(content) => content,
 		Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -640,18 +525,32 @@ fn read_zsh_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 		.rev()
 		.map(str::trim)
 		.filter(|line| !line.is_empty())
-		.filter_map(|line| {
-			if let Some(after_semicolon) = line.split_once(';').map(|(_, right)| right.trim()) {
-				if !after_semicolon.is_empty() {
-					return Some(after_semicolon.to_owned());
-				}
-			}
-
-			Some(line.to_owned())
-		})
+		.map(parse_zsh_history_entry)
 		.collect::<Vec<_>>();
 
 	Ok(nth_from_latest(candidates, skip))
+}
+
+fn resolve_zsh_history_path() -> Option<PathBuf> {
+	if let Some(histfile) = env::var_os("HISTFILE") {
+		return Some(PathBuf::from(histfile));
+	}
+
+	if let Some(zdotdir) = env::var_os("ZDOTDIR") {
+		return Some(PathBuf::from(zdotdir).join(".zsh_history"));
+	}
+
+	get_home_dir().map(|home| home.join(".zsh_history"))
+}
+
+fn parse_zsh_history_entry(line: &str) -> String {
+	if let Some(after_semicolon) = line.split_once(';').map(|(_, right)| right.trim())
+		&& !after_semicolon.is_empty()
+	{
+		return after_semicolon.to_owned();
+	}
+
+	line.to_owned()
 }
 
 /// Reads the command history from a Fish shell history file.
@@ -728,12 +627,12 @@ fn read_nu_history(skip: usize) -> Result<Option<String>, Box<dyn Error>> {
 	let nu_query = format!("history | get command | reverse | skip {} | first", skip);
 	let output = Command::new("nu").args(["-c", &nu_query]).output();
 
-	if let Ok(value) = output {
-		if value.status.success() {
-			let from_cli = String::from_utf8_lossy(&value.stdout).trim().to_owned();
-			if !from_cli.is_empty() {
-				return Ok(Some(from_cli));
-			}
+	if let Ok(value) = output
+		&& value.status.success()
+	{
+		let from_cli = String::from_utf8_lossy(&value.stdout).trim().to_owned();
+		if !from_cli.is_empty() {
+			return Ok(Some(from_cli));
 		}
 	}
 
@@ -770,4 +669,45 @@ fn is_self_invocation(command_line: &str) -> bool {
 		|| first.ends_with("/please.exe")
 		|| first.ends_with("\\please")
 		|| first.ends_with("\\please.exe")
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn parse_shell_name_supports_common_aliases() {
+		assert_eq!(parse_shell_name("/usr/bin/fish"), ShellKind::Fish);
+		assert_eq!(parse_shell_name("-zsh"), ShellKind::Zsh);
+		assert_eq!(parse_shell_name("pwsh-preview.exe"), ShellKind::PowerShell);
+		assert_eq!(parse_shell_name("unknown-shell"), ShellKind::Unknown);
+	}
+
+	#[test]
+	fn self_invocation_detects_binary_forms() {
+		assert!(is_self_invocation("please"));
+		assert!(is_self_invocation("/usr/local/bin/please status"));
+		assert!(is_self_invocation("\"C:\\\\tools\\\\please.exe\" --help"));
+		assert!(!is_self_invocation("pleasee --help"));
+	}
+
+	#[test]
+	fn bash_timestamp_marker_detection_handles_edge_cases() {
+		assert!(is_bash_timestamp_marker("#1700000000"));
+		assert!(!is_bash_timestamp_marker("#abc"));
+		assert!(!is_bash_timestamp_marker("echo '#1700000000'"));
+	}
+
+	#[test]
+	fn zsh_history_parser_strips_prefix_when_present() {
+		assert_eq!(
+			parse_zsh_history_entry(": 1717953075:0;git status"),
+			"git status"
+		);
+		assert_eq!(parse_zsh_history_entry("ls -la"), "ls -la");
+		assert_eq!(
+			parse_zsh_history_entry(": 1717953075:0;   "),
+			": 1717953075:0;   "
+		);
+	}
 }

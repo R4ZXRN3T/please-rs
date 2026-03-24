@@ -1,6 +1,7 @@
+mod get_current_shell;
 mod manage_last_command;
 
-use std::env::args;
+use std::env::{self, args};
 use std::error::Error;
 use std::io;
 use std::process::{self, Command, Stdio};
@@ -14,11 +15,11 @@ use std::process::{self, Command, Stdio};
 ///
 /// # Returns
 ///
-/// Returns the exit code of the executed command, or an error if the command failed to start.
+/// Returns the child process exit code, or `1` when no platform-specific code is available.
 ///
 /// # Errors
 ///
-/// Returns an error if the command arguments are empty or if the command fails to start.
+/// Returns an error if `command_args` is empty or the child process fails to start.
 fn execute_command(command_args: &[String]) -> Result<i32, Box<dyn Error>> {
 	if command_args.is_empty() {
 		return Err(io::Error::other("illegal command length of zero").into());
@@ -43,10 +44,10 @@ fn execute_command(command_args: &[String]) -> Result<i32, Box<dyn Error>> {
 
 /// Prints the help message to stdout.
 ///
-/// Displays usage information, behavior description, and examples for the `please` command.
+/// Displays usage information, available options, and examples for the `please` command.
 fn print_help() {
-  println!(
-	"please - run commands with sudo, or re-run the last saved command.\n\
+	println!(
+		"please - Run commands with sudo or replay your last command.\n\
 \n\
 USAGE:\n\
   please [COMMAND] [ARG]...\n\
@@ -55,39 +56,64 @@ USAGE:\n\
 OPTIONS:\n\
   -h, --help         Show this message\n\
   -p, --print-shell  Print the detected shell\n\
-  -i, --info         Print version and basic information\n\
+  -i, --info         Print detailed runtime information\n\
+  -v, --version      Print version\n\
 \n\
 BEHAVIOR:\n\
   With arguments: runs `sudo <arguments...>`.\n\
-  Without arguments: loads the last saved command and runs it with sudo.\n\
+  Without arguments: finds the last non-`please` command from history and runs it with sudo.\n\
+  Override shell detection with the `PLEASE_SHELL` environment variable.\n\
 \n\
 EXAMPLES:\n\
   please apt update\n\
   please systemctl restart nginx\n\
-  please"
-  )
+	  please\n\
+  please --print-shell"
+	)
 }
 
+/// Prints only the application version.
+fn print_version() {
+	println!("{}", env!("CARGO_PKG_VERSION"));
+}
+
+/// Prints detailed runtime information.
 fn print_info() {
+	let detected_shell = get_current_shell::detect_shell();
+	let forced_shell = env::var("PLEASE_SHELL").ok();
+	let forced_shell = forced_shell.as_deref().unwrap_or("<not set>");
+
 	println!(
-		"{} v{}\n\nRun commands with sudo, or re-run the last saved command.\n\nFor usage details, run `please --help`.",
+		"{} v{}\n\
+Target: {}-{}\n\
+Detected shell: {}\n\
+PLEASE_SHELL: {}\n\
+\n\
+Run commands with sudo or replay your last non-`please` command.\n\
+For usage details, run `please --help`.",
 		env!("CARGO_PKG_NAME"),
-		env!("CARGO_PKG_VERSION")
+		env!("CARGO_PKG_VERSION"),
+		env::consts::OS,
+		env::consts::ARCH,
+		detected_shell,
+		forced_shell
 	);
 }
 
 /// Entry point for the `please` command-line application.
 ///
-/// Processes command-line arguments and either runs a given command with `sudo` or retrieves
-/// and runs the last saved command from shell history.
+/// Processes command-line arguments, handles built-in options, and then either:
+/// - runs a provided command through `sudo`, or
+/// - retrieves the last non-`please` command from shell history and runs it through `sudo`.
 ///
 /// # Returns
 ///
-/// Returns `Ok(())` on success or an error if command execution fails.
+/// Returns `Ok(())` for built-in informational options.
+/// For command execution paths, this function exits the process with the child exit code.
 ///
 /// # Errors
 ///
-/// Returns an error if the command fails to execute or if the shell detection fails.
+/// Returns an error if history discovery fails (no-argument mode) or if spawning a command fails.
 fn main() -> Result<(), Box<dyn Error>> {
 	let args: Vec<String> = args().collect();
 	if args.len() == 2 {
@@ -96,8 +122,12 @@ fn main() -> Result<(), Box<dyn Error>> {
 				print_help();
 				return Ok(());
 			}
+			"-v" | "--version" => {
+				print_version();
+				return Ok(());
+			}
 			"-p" | "--print-shell" => {
-				println!("Detected shell: {}", manage_last_command::detect_shell());
+				println!("Detected shell: {}", get_current_shell::detect_shell());
 				return Ok(());
 			}
 			"-i" | "--info" => {
