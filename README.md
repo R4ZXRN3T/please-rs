@@ -18,7 +18,9 @@ Typing `sudo !!` or copy-pasting the previous command can be shell-specific and 
 - [Rust toolchain](https://rust-lang.org/learn/get-started/) (for building from source)
 - [Make](https://www.gnu.org/software/make/) for executing the build scripts.
 - [jq](https://jqlang.org/) for determining the version during build
-- A C/C++ compiler. ideally, [gcc](https://gcc.gnu.org/) for Linux/MacOs and [MSVC](https://visualstudio.microsoft.com/downloads/#title-build-tools-for-visual-studio-2026) for Windows (scroll down to 'Tools for Visual Studio', download and install 'Build tools for Visual Studio')
+- A C/C++ compiler. ideally, [gcc](https://gcc.gnu.org/) for Linux/MacOs
+  and [MSVC](https://visualstudio.microsoft.com/downloads/#title-build-tools-for-visual-studio-2026) for Windows (scroll
+  down to 'Tools for Visual Studio', download and install 'Build tools for Visual Studio')
 - [UPX](https://upx.github.io/) For compressing the binary (Only for Linux)
 
 ### Platform-Specific Requirements
@@ -38,7 +40,8 @@ Typing `sudo !!` or copy-pasting the previous command can be shell-specific and 
 >
 > [read more about sudo for windows](https://learn.microsoft.com/windows/advanced-settings/sudo/)
 >
-> If you're on an earlier Windows version, you will have to use [gsudo](https://github.com/gerardog/gsudo), which works on everything newer than Windows 7 SP 1. Without any `sudo` implementation, `please` will not work.
+> If you're on an earlier Windows version, you will have to use [gsudo](https://github.com/gerardog/gsudo), which works
+> on everything newer than Windows 7 SP 1. Without any `sudo` implementation, `please` will not work.
 > Also, make sure that `sudo` is available on `PATH`.
 
 ### Supported Shells
@@ -137,6 +140,24 @@ Show help:
 please --help
 ```
 
+Show detailed runtime info:
+
+```bash
+please --info
+```
+
+Print only the version:
+
+```bash
+please --version
+```
+
+Print the detected shell:
+
+```bash
+please --print-shell
+```
+
 Run a command with `sudo`:
 
 ```bash
@@ -150,14 +171,24 @@ Re-run your last non-`please` command with `sudo`:
 please
 ```
 
+Built-in options are handled as standalone arguments (`please --help`, `please --info`, etc.).
+
 ## How no-argument mode works
 
 When you run `please` without arguments:
 
 1. it detects your shell
-2. reads the last history entry
+2. reads history from shell-specific sources
 3. skips entries that are `please` itself
 4. wraps the selected command for your shell and executes it via `sudo`
+
+History source highlights:
+
+- `bash`/`sh`: `$HISTFILE` or `~/.bash_history` / `~/.sh_history`
+- `zsh`: `$HISTFILE`, then `$ZDOTDIR/.zsh_history`, then `~/.zsh_history`
+- `fish`: `$XDG_DATA_HOME/fish/fish_history` or `~/.local/share/fish/fish_history`
+- `PowerShell`: common PSReadLine locations on Windows, Linux, and macOS
+- `nu`: `nu` CLI history query, then `~/.config/nushell/history.txt`
 
 Shell wrapping examples:
 
@@ -180,6 +211,12 @@ $env:PLEASE_SHELL = "pwsh"
 ```
 
 Accepted values include names like `cmd`, `powershell`, `pwsh`, `bash`, `sh`, `zsh`, `fish`, `nu`.
+
+To inspect what `please` currently resolves, run:
+
+```bash
+please --info
+```
 
 ## Uninstall
 
