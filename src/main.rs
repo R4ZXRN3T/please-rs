@@ -45,22 +45,35 @@ fn execute_command(command_args: &[String]) -> Result<i32, Box<dyn Error>> {
 ///
 /// Displays usage information, behavior description, and examples for the `please` command.
 fn print_help() {
-	println!(
-		"please - run commands with sudo, or re-run the last saved command.\n\
+  println!(
+	"please - run commands with sudo, or re-run the last saved command.\n\
 \n\
-Usage:\n\
+USAGE:\n\
   please [COMMAND] [ARG]...\n\
-  please -h | --help\n\
+  please [OPTIONS]\n\
 \n\
-Behavior:\n\
-  - With arguments: runs `sudo <arguments...>`.\n\
-  - Without arguments: loads the last saved command and runs it with sudo.\n\
+OPTIONS:\n\
+  -h, --help         Show this message\n\
+  -p, --print-shell  Print the detected shell\n\
+  -i, --info         Print version and basic information\n\
 \n\
-Examples:\n\
+BEHAVIOR:\n\
+  With arguments: runs `sudo <arguments...>`.\n\
+  Without arguments: loads the last saved command and runs it with sudo.\n\
+\n\
+EXAMPLES:\n\
   please apt update\n\
   please systemctl restart nginx\n\
   please"
-	)
+  )
+}
+
+fn print_info() {
+	println!(
+		"{} v{}\n\nRun commands with sudo, or re-run the last saved command.\n\nFor usage details, run `please --help`.",
+		env!("CARGO_PKG_NAME"),
+		env!("CARGO_PKG_VERSION")
+	);
 }
 
 /// Entry point for the `please` command-line application.
@@ -77,9 +90,22 @@ Examples:\n\
 /// Returns an error if the command fails to execute or if the shell detection fails.
 fn main() -> Result<(), Box<dyn Error>> {
 	let args: Vec<String> = args().collect();
-	if args.len() == 2 && matches!(args[1].as_str(), "-h" | "--help") {
-		print_help();
-		return Ok(());
+	if args.len() == 2 {
+		match args[1].as_str() {
+			"-h" | "--help" => {
+				print_help();
+				return Ok(());
+			}
+			"-p" | "--print-shell" => {
+				println!("Detected shell: {}", manage_last_command::detect_shell());
+				return Ok(());
+			}
+			"-i" | "--info" => {
+				print_info();
+				return Ok(());
+			}
+			_ => (),
+		}
 	}
 
 	let mut command: Vec<String> = match args.len() {
