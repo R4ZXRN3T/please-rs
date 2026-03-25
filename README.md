@@ -1,4 +1,4 @@
-# please
+# please-rs
 
 A tiny Rust CLI that runs commands with `sudo`.
 
